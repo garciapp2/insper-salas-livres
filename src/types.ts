@@ -33,8 +33,6 @@ export interface SalaLivre {
   andar: string;
   nextEvent: any;
   freeUntil: string;
-  hash: string;
-  karma: number;
   todayEventCount: number;
   forStudies: boolean;
   forStudiesUntil?: string;

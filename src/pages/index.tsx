@@ -1,75 +1,40 @@
-import { Alert, Button, CircularProgress, Tab, TabList, Tabs, Typography } from '@mui/joy';
-import Card from '@mui/joy/Card';
-import va from '@vercel/analytics';
-import { Analytics } from '@vercel/analytics/react';
-import { getAll } from '@vercel/edge-config';
-import axios from 'axios';
-import { DateTime } from 'luxon';
-import { GetStaticProps, GetStaticPropsContext, InferGetStaticPropsType } from 'next';
-import Head from 'next/head';
-import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import useSWR from 'swr';
-import { SalasResponse } from '../types';
+import axios from 'axios'
+import { DateTime } from 'luxon'
+import Head from 'next/head'
+import { useEffect, useMemo, useState } from 'react'
+import useSWR from 'swr'
+import { SalaLivre, SalasResponse } from '../types'
+
+const REPO_URL = 'https://github.com/garciapp2/insper-salas-livres'
+
+type Tema = 'light' | 'dark'
 
 const predios = [
   {
-    nome: 'Quatá 300',
+    nome: 'P1',
+    label: 'P1 · Quatá 300',
     apiNames: ['PRÉDIO QUATÁ 300', 'PRÉDIO CLAUDIO HADDAD (QUATÁ,300)'],
-    andares: [-1, 1, 2, 3, 4]
+    andares: [-1, 1, 2, 3, 4],
   },
   {
-    nome: 'Quatá 200',
+    nome: 'P2',
+    label: 'P2 · Quatá 200',
     apiNames: ['PRÉDIO QUATÁ 200'],
-    andares: [1, 2, 3, 4, 5]
+    andares: [1, 2, 3, 4, 5],
   },
   {
-    nome: 'Quatá 67',
+    nome: 'P3',
+    label: 'P3 · Quatá 67',
     apiNames: ['PRÉDIO QUATÁ 67'],
-    andares: [1, 2, 3, 4, 5, 6]
-  }
+    andares: [1, 2, 3, 4, 5, 6],
+  },
 ]
 
-type Config = {
-  enableVotes: boolean,
-  showNewsCard: boolean,
-  newsCardTitle: string,
-  newsCardText: string,
-  showTopCard: boolean,
-}
-
-async function getConfigWithDefaults(): Promise<Config> {
-  try {
-    const config = await getAll<Config>()
-    return config
-  } catch (error) {
-    return {
-      enableVotes: true,
-      showNewsCard: false,
-      newsCardTitle: 'Nova funcionalidade!',
-      newsCardText: 'Agora você pode votar nas salas que você mais gosta!',
-      showTopCard: true,
-    }
-  }
-}
-
-export const getStaticProps: GetStaticProps<{ config: Config }> = async (context: GetStaticPropsContext) => {
-  const config = await getConfigWithDefaults();
-  return {
-    props: { config },
-    revalidate: 60 * 15,
-  };
-}
+const TODOS = predios.length
 
 async function fetchSalasLivres() {
-  const response = await axios.get<SalasResponse>('/api/salas').then(res => res.data)
-  return response.map(sala => ({
-    ...sala,
-    sortingKarma: sala.karma,
-  }))
+  return axios.get<SalasResponse>('/api/salas').then((res) => res.data)
 }
-
-const interleave = (arr: any[], x: any) => arr.flatMap(e => [e, x]).slice(0, -1)
 
 function getNumeroAndar(stringAndar: string) {
   if (stringAndar === 'TÉRREO') return 0
@@ -77,226 +42,378 @@ function getNumeroAndar(stringAndar: string) {
   return parseInt(stringAndar.split('')[0])
 }
 
-export default function Home({ config }: InferGetStaticPropsType<typeof getStaticProps>) {
-  const { data, error, isLoading, mutate } = useSWR('/api/salas', fetchSalasLivres)
+function formatHora(iso: string) {
+  return DateTime.fromISO(iso).toLocaleString({
+    timeZone: 'America/Sao_Paulo',
+    hour: 'numeric',
+    minute: 'numeric',
+    hourCycle: 'h23',
+  })
+}
 
-  const [predio, setPredio] = useState(predios.length)
-  const [andar, setAndar] = useState(0)
-  const [votes, setVotes] = useState<{ [key: string]: 'UP' | 'DOWN' }>({})
-  const [isVoting, setIsVoting] = useState<{ [key: string]: 'UP' | 'DOWN' | false }>({})
+/** Quanto tempo ainda falta, em linguagem curta: "2h30", "45min". */
+function formatRestante(iso: string, agora: DateTime) {
+  const diff = DateTime.fromISO(iso).diff(agora)
+  const horas = Math.floor(diff.as('hours'))
+  const minutos = Math.floor(diff.as('minutes')) % 60
+
+  if (horas <= 0 && minutos <= 0) return null
+  if (horas <= 0) return `${minutos}min`
+  if (minutos === 0) return `${horas}h`
+  return `${horas}h${String(minutos).padStart(2, '0')}`
+}
+
+function SearchIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M11 11l3.2 3.2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function ClearIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 17 17" aria-hidden="true">
+      <circle cx="8.5" cy="8.5" r="8.5" fill="currentColor" />
+      <path
+        d="M5.6 5.6l5.8 5.8M11.4 5.6l-5.8 5.8"
+        stroke="var(--bg-elevated)"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function SunIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <circle cx="10" cy="10" r="3.6" fill="currentColor" />
+      <g stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+        <path d="M10 1.6v2M10 16.4v2M18.4 10h-2M3.6 10h-2" />
+        <path d="M15.9 4.1l-1.4 1.4M5.5 14.5l-1.4 1.4M15.9 15.9l-1.4-1.4M5.5 5.5L4.1 4.1" />
+      </g>
+    </svg>
+  )
+}
+
+function MoonIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path
+        d="M17 12.3A7.5 7.5 0 017.7 3a7.5 7.5 0 109.3 9.3z"
+        fill="currentColor"
+      />
+    </svg>
+  )
+}
+
+function WarningIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <path d="M8 1.4a6.6 6.6 0 100 13.2A6.6 6.6 0 008 1.4zm0 3a.85.85 0 01.85.9l-.2 3.3a.65.65 0 01-1.3 0l-.2-3.3A.85.85 0 018 4.4zm0 7.5a.9.9 0 110-1.8.9.9 0 010 1.8z" />
+    </svg>
+  )
+}
+
+function SkeletonList() {
+  return (
+    <div className="list" aria-hidden="true">
+      {[68, 52, 60, 45, 58, 50].map((largura, i) => (
+        <div className="skeleton-row" key={i}>
+          <div style={{ flex: 1 }}>
+            <div className="skeleton" style={{ width: `${largura}%` }} />
+            <div className="skeleton" style={{ width: '34%', marginTop: 7, height: 9 }} />
+          </div>
+          <div className="skeleton" style={{ width: 38, height: 13 }} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export default function Home() {
+  const { data, error, isLoading, mutate } = useSWR('/api/salas', fetchSalasLivres, {
+    refreshInterval: 5 * 60 * 1000,
+  })
+
+  const [predio, setPredio] = useState(TODOS)
+  const [andar, setAndar] = useState<number | null>(null)
+  const [busca, setBusca] = useState('')
+  // Claro é sempre o padrão; o escuro só vale se a pessoa escolher.
+  // O valor real é aplicado antes da pintura pelo script no _document.
+  const [tema, setTema] = useState<Tema>('light')
+  // O horário só é calculado no cliente, pra não divergir do HTML estático
+  const [agora, setAgora] = useState<DateTime | null>(null)
 
   useEffect(() => {
-    if (!localStorage.getItem('userId')) {
-      localStorage.setItem('userId', crypto.randomUUID())
-      va.track('new_userid', { id: localStorage.getItem('userId') })
-    }
-
-    setVotes(JSON.parse(localStorage.getItem('votes') || `{}`) || {})
+    setAgora(DateTime.now())
+    const id = setInterval(() => setAgora(DateTime.now()), 60 * 1000)
+    return () => clearInterval(id)
   }, [])
 
-  // @ts-ignore
-  function handlePredioChange(newValue: number) {
-    setPredio(newValue)
-    va.track('predio_filter', {
-      predio: predio,
-      andar: newValue,
-    })
-    if (newValue !== predios.length) setAndar(predios[newValue].andares.length)
-  }
+  // Acompanha o que o script do _document já aplicou no <html>
+  useEffect(() => {
+    setTema(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light')
+  }, [])
 
-  function handleAndarChange(newValue: number) {
-    setAndar(newValue)
-    va.track('andar_filter', {
-      predio: predio,
-      andar: newValue,
-    })
-  }
-
-  async function setVote(hash: string, vote: 'UP' | 'DOWN') {
-    setIsVoting(isVoting => ({ ...isVoting, [hash]: vote }))
-    const response = await axios.post('/api/vote', {
-      hash,
-      vote,
-      user_id: localStorage.getItem('userId'),
-    })
-    if (response.status === 200) {
-      setVotes(votes => {
-        const voteObject = { ...votes, [hash]: vote }
-        localStorage.setItem('votes', JSON.stringify(voteObject))
-        return voteObject
-      })
-      mutate(data => ([
-        ...data!.filter(sala => sala.hash !== hash),
-        {
-          ...data!.find(sala => sala.hash === hash)!,
-          karma: response.data.score
-        }
-      ]), false)
-      setIsVoting(isVoting => ({ ...isVoting, [hash]: false }))
+  function alternarTema() {
+    const novo: Tema = tema === 'dark' ? 'light' : 'dark'
+    setTema(novo)
+    document.documentElement.setAttribute('data-theme', novo)
+    try {
+      localStorage.setItem('tema', novo)
+    } catch {
+      // Navegação privada bloqueia o storage: o tema só não persiste
     }
-    
-    va.track(`vote_${vote.toLowerCase()}`, {
-      room_hash: hash,
-      user_id: localStorage.getItem('userId'),
-    })
   }
+
+  function selecionarPredio(index: number) {
+    setPredio(index)
+    setAndar(null)
+  }
+
+  const salas = useMemo(() => {
+    if (!data) return []
+    const termo = busca.trim().toLowerCase()
+
+    return data
+      .filter((sala) => predio === TODOS || predios[predio].apiNames.includes(sala.predio))
+      .filter((sala) => andar === null || getNumeroAndar(sala.andar) === andar)
+      .filter((sala) => !termo || sala.nome.toLowerCase().includes(termo))
+      .sort((a: SalaLivre, b: SalaLivre) => {
+        // Salas reservadas para estudo primeiro: são as que dá pra usar sem susto
+        if (a.forStudies !== b.forStudies) return a.forStudies ? -1 : 1
+        // Depois as que ficam livres por mais tempo
+        const tempo = new Date(b.freeUntil).getTime() - new Date(a.freeUntil).getTime()
+        if (tempo !== 0) return tempo
+        // Desempate: menos aulas no dia, depois ordem alfabética
+        if (a.todayEventCount !== b.todayEventCount) return a.todayEventCount - b.todayEventCount
+        return a.nome.localeCompare(b.nome, 'pt-BR')
+      })
+  }, [data, predio, andar, busca])
+
+  const uma = salas.length === 1
+  const contagem = `${salas.length} ${uma ? 'sala' : 'salas'}`
+  const contagemLonga = `${contagem} ${uma ? 'livre' : 'livres'} agora`
 
   return (
     <>
       <Head>
         <title>Salas Livres Insper</title>
-        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"/>
-        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png"/>
-        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png"/>
-        <link rel="manifest" href="/site.webmanifest"/>
-        <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#5bbad5"/>
-        <meta name="msapplication-TileColor" content="#da532c"/>
-        <meta name="theme-color" content="#ffffff"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <meta
+          name="description"
+          content="Encontre salas desocupadas para estudar no Insper agora."
+        />
+        {/* Segue o tema escolhido, não o do sistema — por isso sem media query */}
+        <meta name="theme-color" content={tema === 'dark' ? '#1c1c1e' : '#f5f5f7'} />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+        <link rel="manifest" href="/site.webmanifest" />
+        <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#e50505" />
       </Head>
-      <main style={{
-        width: '100%',
-        display: 'flex',
-        justifyContent: 'center',
-      }}>
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '0.5rem',
-          maxWidth: '500px',
-          width: '100%',
-        }}>
-          {
-            config.showTopCard ? (
-              <Alert color='danger' style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'flex-start',
-              }}>
-                <Typography
-                  color='danger'
-                >
-                  As salas podem estar ocupadas mesmo que estejam disponíveis aqui, pois essa página não leva em conta outros tipo de reserva (eventos, reuniões, entidades, etc.). Faça bom uso!
-                  <br />
-                  <br />
-                  Quer ajudar com o desenvolvimento desse site? <Link href='https://github.com/pedrofracassi/insper-salas-livres'>Acesse o repositório no GitHub</Link> e contribua!
-                </Typography>
-              </Alert>
-            ) : <></>
-          }
-          {
-            config.showNewsCard ? (
-              <Alert color='warning' style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'flex-start'
-              }}>
-                <Typography
-                  color='warning'
-                >
-                  <b>{config.newsCardTitle} </b>
-                  {
-                    interleave(config.newsCardText.split('\n').map((line, index) => (
-                      <Typography key={index} color='warning'>{line}</Typography>
-                    )), <br />)
-                  }
-                </Typography>
-              </Alert>
-            ) : <></>
-          }
-          <Tabs style={{width: '100%'}} value={predio} onChange={(event, newValue) => { handlePredioChange(newValue as number) }} size='sm' color='danger'>
-            <TabList style={{ width: '100%' }} variant="soft" color="neutral">
-              {
-                predios.map((predio, index) => (
-                  <Tab key={index}>{predio.nome}</Tab>
-                ))
-              }
-              <Tab color='danger' key={predios.length}>Todos</Tab>
-            </TabList>
-          </Tabs>
-          {
-            predio !== predios.length && (
-              <Tabs value={andar} onChange={(event, newValue) => { handleAndarChange(newValue as number) }} size='sm' color='danger'>
-                <TabList variant="soft" color="neutral">
-                  {
-                    predios[predio].andares.map((andar, index) => (
-                      <Tab key={index}>{andar}º</Tab>
-                    ))
-                  }
-                  <Tab color='danger'>Todos</Tab>
-                </TabList>
-              </Tabs>
-            )
-          }
-          {
-          data ? (
-            data
-              .filter(sala => predio === predios.length || predios[predio].apiNames.includes(sala.predio))
-              .filter(sala => !predios[predio] || andar === predios[predio].andares.length || getNumeroAndar(sala.andar) == predios[predio].andares[andar])
-              .sort((a, b) => a.nome > b.nome ? 1 : -1)
-              .sort((a, b) => a.todayEventCount > b.todayEventCount ? -1 : 1)
-              .sort((a, b) => new Date(b.freeUntil).getTime() - new Date(a.freeUntil).getTime())
-              .sort((a, b) => a.forStudiesUntil && b.forStudiesUntil ? new Date(b.forStudiesUntil).getTime() - new Date(a.forStudiesUntil).getTime() : 0)
-              .sort((a, b) => a.forStudies ? -1 : 1)
-              .sort((a, b) => config.enableVotes ? b.sortingKarma - a.sortingKarma : 0)
-              .map((sala, index) => (
-                <Card variant='outlined' key={sala.nome}>
-                  <div style={{display: 'flex'}}>
-                    <div style={{flexGrow: '1', display: 'flex', flexDirection: 'column', justifyContent: 'center'}}>
-                      <Typography level="h2" fontSize={14} color='danger'>{sala.nome}</Typography>
-                      <Typography level="body-sm">{predios.find(p => p.apiNames.includes(sala.predio))?.nome.toUpperCase() || sala.predio} • {sala.andar}</Typography>
-                      <Typography>Disponível até as <b>{DateTime.fromISO(sala.freeUntil).toLocaleString({
-                        timeZone: 'America/Sao_Paulo',
-                        hour: "numeric",
-                        minute: "numeric",
-                        hourCycle: "h23",
-                      })}</b></Typography>
-                      {
-                        sala.todayEventCount === 0 ? (
-                          <Typography color='warning'>⭐ Sem aulas hoje</Typography>
-                        ) : <></>
-                      }
-                      {
-                        sala.forStudies && sala.forStudiesUntil ? (
-                          <Typography color='success'>✅ Reservada para estudos até <b>{DateTime.fromISO(sala.forStudiesUntil).toLocaleString({
-                            timeZone: 'America/Sao_Paulo',
-                            hour: "numeric",
-                            minute: "numeric",
-                            hourCycle: "h23",
-                          })}</b></Typography>
-                        ) : <></>
-                      }
-                    </div>
-                    {
-                      config.enableVotes ? (
-                        <div style={{ display: 'flex', justifyContent: 'center', flexDirection: 'column', gap: '0.2em', alignItems: 'center' }}>
-                          <Button onClick={() => {
-                            setVote(sala.hash, 'UP')
-                          }} disabled={votes[sala.hash] === 'UP' || !!isVoting[sala.hash]} loading={isVoting[sala.hash] == 'UP'} size='sm'>👍</Button>
-                          <Typography color={sala.karma != 0 ? sala.karma >= 1 ? 'success' : 'danger' : undefined}><b>{sala.karma}</b></Typography>
-                          <Button onClick={() => {
-                            setVote(sala.hash, 'DOWN')
-                          }} disabled={votes[sala.hash] === 'DOWN' || !!isVoting[sala.hash]} loading={isVoting[sala.hash] == 'DOWN'} size='sm'>👎</Button>
-                        </div>
-                      ) : <></>
-                    }
-                  </div>
-                </Card>
-              ))
-          ) : (
-            <div style={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              height: '100%',
-              padding: '6rem',
-            }}>
-              <CircularProgress />
-            </div>
-          )
-        }
+
+      {/* Título e botão de tema rolam junto com a página */}
+      <header className="masthead">
+        <div className="masthead__titles">
+          <h1 className="masthead__title">
+            Salas <span className="masthead__title-accent">Livres</span>
+          </h1>
+          <p className="masthead__subtitle">
+            {agora ? `atualizado às ${agora.toFormat('HH:mm')}` : 'Insper'}
+          </p>
         </div>
+
+        <button
+          className="theme-toggle"
+          onClick={alternarTema}
+          aria-label={tema === 'dark' ? 'Usar tema claro' : 'Usar tema escuro'}
+        >
+          {tema === 'dark' ? <SunIcon /> : <MoonIcon />}
+        </button>
+      </header>
+
+      {/* Só os filtros ficam presos no topo, com altura fixa */}
+      <div className="controls">
+        <div className="controls__inner">
+          <div className="search">
+            <span className="search__icon">
+              <SearchIcon />
+            </span>
+            <input
+              className="search__input"
+              type="search"
+              placeholder="Buscar sala"
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              aria-label="Buscar sala pelo nome"
+            />
+            {busca && (
+              <button
+                className="search__clear"
+                onClick={() => setBusca('')}
+                aria-label="Limpar busca"
+              >
+                <ClearIcon />
+              </button>
+            )}
+          </div>
+
+          <div className="segmented" role="tablist" aria-label="Filtrar por prédio">
+            <div
+              className="segmented__pill"
+              style={{
+                left: 2,
+                width: `calc((100% - 4px) / ${predios.length + 1})`,
+                transform: `translateX(calc(${predio === TODOS ? 0 : predio + 1} * 100%))`,
+              }}
+            />
+            <button
+              role="tab"
+              aria-selected={predio === TODOS}
+              className={`segmented__option${predio === TODOS ? ' segmented__option--active' : ''}`}
+              onClick={() => selecionarPredio(TODOS)}
+            >
+              Todos
+            </button>
+            {predios.map((p, index) => (
+              <button
+                key={p.nome}
+                role="tab"
+                aria-selected={predio === index}
+                className={`segmented__option${
+                  predio === index ? ' segmented__option--active' : ''
+                }`}
+                onClick={() => selecionarPredio(index)}
+              >
+                {p.nome}
+              </button>
+            ))}
+          </div>
+
+          {predio !== TODOS && (
+            <div className="chips" role="tablist" aria-label="Filtrar por andar">
+              <button
+                role="tab"
+                aria-selected={andar === null}
+                className={`chip${andar === null ? ' chip--active' : ''}`}
+                onClick={() => setAndar(null)}
+              >
+                Todos
+              </button>
+              {predios[predio].andares.map((numero) => (
+                <button
+                  key={numero}
+                  role="tab"
+                  aria-selected={andar === numero}
+                  className={`chip${andar === numero ? ' chip--active' : ''}`}
+                  onClick={() => setAndar(numero)}
+                >
+                  {numero < 0
+                    ? `${Math.abs(numero)}º subsolo`
+                    : numero === 0
+                    ? 'Térreo'
+                    : `${numero}º`}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <main className="shell">
+
+        <div className="notice">
+          <span className="notice__icon">
+            <WarningIcon />
+          </span>
+          <span>
+            Uma sala listada aqui ainda pode estar ocupada. A agenda não inclui eventos, reuniões
+            nem reservas de entidades.
+          </span>
+        </div>
+
+        {error ? (
+          <div className="empty" style={{ marginTop: 24 }}>
+            <p className="empty__title">Não deu pra carregar as salas</p>
+            <p className="empty__text">A agenda do Insper não respondeu.</p>
+            <button className="empty__action" onClick={() => mutate()}>
+              Tentar de novo
+            </button>
+          </div>
+        ) : isLoading ? (
+          <>
+            <p className="section-title">Carregando</p>
+            <SkeletonList />
+          </>
+        ) : salas.length === 0 ? (
+          <div className="empty" style={{ marginTop: 24 }}>
+            <p className="empty__title">Nenhuma sala por aqui</p>
+            <p className="empty__text">
+              {busca ? `Nada com "${busca}".` : 'Todas as salas desse filtro estão ocupadas agora.'}
+            </p>
+          </div>
+        ) : (
+          <>
+            <p className="section-title">{contagemLonga}</p>
+            <div className="list">
+              {salas.map((sala) => {
+                const restante = agora ? formatRestante(sala.freeUntil, agora) : null
+                // Algumas salas vêm sem prédio ou sem andar; junta só o que existe
+                // pra não sobrar um "·" solto na linha.
+                const local = [
+                  predios.find((p) => p.apiNames.includes(sala.predio))?.label || sala.predio,
+                  sala.andar?.toLowerCase(),
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
+                return (
+                  <article className="room" key={`${sala.predio}-${sala.andar}-${sala.nome}`}>
+                    <div className="room__main">
+                      <h2 className="room__name">{sala.nome}</h2>
+                      {local && <p className="room__where">{local}</p>}
+                      {(sala.forStudies || sala.todayEventCount === 0) && (
+                        <div className="room__tags">
+                          {sala.forStudies && sala.forStudiesUntil && (
+                            <span className="tag tag--study">
+                              Sala de estudos até {formatHora(sala.forStudiesUntil)}
+                            </span>
+                          )}
+                          {sala.todayEventCount === 0 && (
+                            <span className="tag tag--free">Sem aulas hoje</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {/* Quanto tempo ainda dá pra ficar é o que decide a escolha,
+                        então vem em destaque; o horário exato fica embaixo. */}
+                    <div className="room__time">
+                      {restante ? (
+                        <>
+                          <div className="room__until">{restante}</div>
+                          <div className="room__remaining">até {formatHora(sala.freeUntil)}</div>
+                        </>
+                      ) : (
+                        <div className="room__until">{formatHora(sala.freeUntil)}</div>
+                      )}
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+          </>
+        )}
+
+        <footer className="footer">
+          <p>Dados da agenda pública do Insper. Atualiza sozinho a cada 5 minutos.</p>
+          <p>
+            Quer ajudar no desenvolvimento? <a href={REPO_URL}>Contribua no GitHub</a>
+          </p>
+        </footer>
       </main>
-      <Analytics />
     </>
   )
 }

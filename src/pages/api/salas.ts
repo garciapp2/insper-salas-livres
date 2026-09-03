@@ -2,9 +2,7 @@
 import axios from "axios";
 import type { NextApiRequest, NextApiResponse } from "next";
 import { parseStringPromise } from "xml2js";
-import { CalendarioEvento, RootAlocacao, SalasResponse } from "../../types";
-import hash from 'object-hash'
-import { kv } from "@vercel/kv";
+import { CalendarioEvento, RootAlocacao } from "../../types";
 
 const ignoredRooms = [
   "AULA REMOTA",
@@ -35,31 +33,16 @@ const displayNames: {
   "403 - LABORATÓRIO DE SISTEMAS ELETRÔNICOS": "LAB. SISTEMAS MECATRÔNICOS"
 };
 
-import UserAgent from 'user-agents';
-
-const userAgent = new UserAgent();
+// Não mande um User-Agent de navegador aqui: o WAF do Insper responde 403 para
+// UAs que parecem browser. O User-Agent padrão do axios passa normalmente.
+const CALENDARIO_URL =
+  "https://cgi.insper.edu.br/agenda/xml/ExibeCalendario.xml";
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const calendario = await axios.get(
-    "https://cgi.insper.edu.br/agenda/xml/ExibeCalendario.xml",
-    {
-      headers: {
-        "User-Agent": userAgent.toString(),
-      },
-    }
-  );
-
-  const allKeys = await kv.keys("votes:*")
-  const allVotes = await Promise.all(allKeys.map(key => kv.smembers(key)))
-  const allVotesWithKeys: {
-    [key: `votes:${string}:${"UP" | "DOWN"}`]: string[]
-  } = allKeys.reduce((acc, key, index) => ({
-    ...acc,
-    [key]: allVotes[index]
-  }), {})
+  const calendario = await axios.get(CALENDARIO_URL);
 
   const calendarioJson: RootAlocacao = await parseStringPromise(
     calendario.data
@@ -103,52 +86,14 @@ export default async function handler(
 
   const rightNow = new Date();
 
-  const salasRedisData = await kv.hgetall<Record<string, { nome: string, predio: string, andar: string }>>("salas") || {}
-  const todasSalasRedis = Object.keys(salasRedisData).map((sala) => sala + '')
-  const todasSalasInsper = [
+  const salasUnicas = [
     ...new Set(calendarioFixed.map((evento) => evento.sala)),
-  ]
-
-  const newSalas: {
-    [key: string]: {
-      nome: string,
-      predio: string,
-      andar: string,
-    }
-  } = todasSalasInsper.filter(sala => !todasSalasRedis.includes(sala)).reduce((acc, curr, i) => ({
-    ...acc,
-    [curr]: {
-      nome: curr,
-      predio: calendarioFixed.find(evento => evento.sala === curr)?.predio,
-      andar: calendarioFixed.find(evento => evento.sala === curr)?.andar,
-    }
-  }), {})
-
-  if (Object.keys(newSalas).length > 0) {
-    kv.hset("salas", newSalas)
-  }
-
-  const todasSalas = [
-    ...new Set([
-      ...todasSalasRedis.map(a => a + ''),
-      ...todasSalasInsper.map(a => a + ''),
-    ])
-  ]
-
-  const salasUnicas = todasSalas.map((nomeSala) => {
-    const sala = calendarioFixed.find((evento) => evento.sala === nomeSala);
-    if (!sala) {
-      return {
-        ...salasRedisData[nomeSala + ''],
-        fromCache: true,
-        nome: nomeSala,
-      }
-    }
+  ].map((nomeSala) => {
+    const sala = calendarioFixed.find((evento) => evento.sala === nomeSala)!;
     return {
       nome: sala.sala,
       predio: sala.predio,
       andar: sala.andar,
-      fromCache: false
     };
   });
 
@@ -209,23 +154,8 @@ export default async function handler(
       return {
         ...sala,
         nome: displayNames[sala.nome] || sala.nome,
+        eventosAgora: undefined,
       };
-    })
-    .map(sala => {
-      const salaHash = hash({
-        ...sala,
-        eventosAgora: undefined,
-        fromCache: undefined,
-        todayEventCount: undefined,
-      })
-      return {
-        ...sala,
-        hash: salaHash,
-        karma: (allVotesWithKeys[`votes:${salaHash}:UP`]?.length || 0) - (allVotesWithKeys[`votes:${salaHash}:DOWN`]?.length || 0),
-
-        eventosAgora: undefined,
-        fromCache: undefined,
-      }
     })
 
   res.status(200).json(salasLivres);
