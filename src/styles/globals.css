@@ -23,7 +23,6 @@
   /* Traços e preenchimentos */
   --separator: rgba(60, 60, 67, 0.24);
   --fill: rgba(120, 120, 128, 0.12);
-  --pill: #ffffff;
   --pill-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 1px 1px rgba(0, 0, 0, 0.04);
 
   /* Vermelho Insper */
@@ -42,8 +41,7 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  /* Cinza escuro do iOS em telas não-OLED: preto puro deixa o contraste
-     duro demais e faz os cartões flutuarem no vazio */
+  /* Cinza do iOS para telas não-OLED, em vez de preto puro */
   --bg: #1c1c1e;
   --bg-elevated: #2c2c2e;
   --header-bg: rgba(28, 28, 30, 0.72);
@@ -54,7 +52,6 @@
 
   --separator: rgba(84, 84, 88, 0.65);
   --fill: rgba(118, 118, 128, 0.24);
-  --pill: #636366;
   --pill-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
 
   --red: #e50505;
@@ -74,10 +71,6 @@
 html {
   /* Não deixa o iOS aumentar a fonte ao girar o aparelho */
   -webkit-text-size-adjust: 100%;
-  /* O navegador compensa sozinho quando algo acima muda de altura. Como o
-     cabeçalho encolhe ao recolher, essa compensação mexia no scroll e ajudava
-     o header a piscar. */
-  overflow-anchor: none;
 }
 
 
@@ -93,8 +86,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Troca de tema suave, em vez de a página virar de uma vez.
-   Só as propriedades que mudam de cor — nada de `all`, que animaria layout. */
+/* Só as propriedades de cor: `all` animaria layout junto. */
 body,
 .controls,
 .list,
@@ -122,7 +114,6 @@ button {
   cursor: pointer;
 }
 
-/* O contorno já acompanha o border-radius de cada elemento */
 :focus-visible {
   outline: 2px solid var(--red);
   outline-offset: 2px;
@@ -139,9 +130,9 @@ button {
 }
 
 /* --------------------------------------------------------------------------
-   Topo — o título e o botão de tema rolam junto com a página.
-   Só a faixa de filtros fica presa no topo, e a altura dela não muda: sem
-   nada redimensionando durante o scroll, o cabeçalho não tem como piscar.
+   Topo — título e botão de tema rolam com a página; só os filtros ficam
+   presos. A altura da faixa presa não pode variar durante o scroll: se variar,
+   ela realimenta a própria posição de rolagem e o cabeçalho pisca.
    -------------------------------------------------------------------------- */
 
 .masthead {
@@ -166,7 +157,6 @@ button {
   color: var(--label);
 }
 
-/* O vermelho da marca no lugar mais visível da página */
 .masthead__title-accent {
   color: var(--red);
 }
@@ -278,7 +268,6 @@ button {
   background: var(--fill);
 }
 
-/* O prédio selecionado ganha o vermelho da marca em vez do branco do iOS */
 .segmented__pill {
   position: absolute;
   top: 2px;
@@ -409,7 +398,7 @@ button {
   font-weight: 600;
   letter-spacing: -0.02em;
   color: var(--label);
-  /* Nomes de laboratório são longos: deixa quebrar em duas linhas em vez de cortar */
+  /* Nomes de laboratório são longos: quebra em duas linhas em vez de cortar */
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -440,7 +429,6 @@ button {
   font-weight: 600;
 }
 
-/* Reservada pra estudo é o destaque: ganha o vermelho da marca */
 .tag--study {
   background: var(--red-soft);
   color: var(--red);
@@ -451,7 +439,6 @@ button {
   color: var(--label-2);
 }
 
-/* Horário à direita — o dado que decide a escolha */
 .room__time {
   flex: none;
   text-align: right;

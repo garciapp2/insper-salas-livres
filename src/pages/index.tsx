@@ -175,10 +175,10 @@ export default function Home() {
   }
 
   const salas = useMemo(() => {
-    if (!data) return []
+    if (!data?.atual) return []
     const termo = busca.trim().toLowerCase()
 
-    return data
+    return data.salas
       .filter((sala) => predio === TODOS || predios[predio].apiNames.includes(sala.predio))
       .filter((sala) => andar === null || getNumeroAndar(sala.andar) === andar)
       .filter((sala) => !termo || sala.nome.toLowerCase().includes(termo))
@@ -349,6 +349,18 @@ export default function Home() {
             <p className="section-title">Carregando</p>
             <SkeletonList />
           </>
+        ) : data && !data.atual ? (
+          <div className="empty" style={{ marginTop: 24 }}>
+            <p className="empty__title">A agenda ainda não virou o dia</p>
+            <p className="empty__text">
+              O Insper publica um dia por vez, e o último disponível é{' '}
+              {data.dataAgenda ?? 'anterior a hoje'}. Mostrar as salas com esses horários daria uma
+              disponibilidade que não existe, então é melhor esperar a agenda atualizar.
+            </p>
+            <button className="empty__action" onClick={() => mutate()}>
+              Verificar de novo
+            </button>
+          </div>
         ) : salas.length === 0 ? (
           <div className="empty" style={{ marginTop: 24 }}>
             <p className="empty__title">Nenhuma sala por aqui</p>
@@ -362,8 +374,8 @@ export default function Home() {
             <div className="list">
               {salas.map((sala) => {
                 const restante = agora ? formatRestante(sala.freeUntil, agora) : null
-                // Algumas salas vêm sem prédio ou sem andar; junta só o que existe
-                // pra não sobrar um "·" solto na linha.
+                // Algumas salas vêm sem prédio ou sem andar: junta só o que
+                // existe pra não sobrar um "·" solto.
                 const local = [
                   predios.find((p) => p.apiNames.includes(sala.predio))?.label || sala.predio,
                   sala.andar?.toLowerCase(),
@@ -388,8 +400,6 @@ export default function Home() {
                         </div>
                       )}
                     </div>
-                    {/* Quanto tempo ainda dá pra ficar é o que decide a escolha,
-                        então vem em destaque; o horário exato fica embaixo. */}
                     <div className="room__time">
                       {restante ? (
                         <>

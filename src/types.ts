@@ -25,7 +25,15 @@ export interface CalendarioEvento {
   subgrupo?: string[];
 }
 
-export type SalasResponse = SalaLivre[];
+export interface SalasResponse {
+  /** false quando a agenda do Insper ainda não publicou o dia de hoje */
+  atual: boolean;
+  /** dia que a agenda está publicando, no formato dd/MM/yyyy */
+  dataAgenda: string | null;
+  /** dia de hoje em São Paulo, para comparar com dataAgenda */
+  hoje: string;
+  salas: SalaLivre[];
+}
 
 export interface SalaLivre {
   nome: string;
