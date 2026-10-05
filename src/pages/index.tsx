@@ -9,28 +9,35 @@ const REPO_URL = 'https://github.com/garciapp2/insper-salas-livres'
 
 type Tema = 'light' | 'dark'
 
+// O prédio é reconhecido pelo número da rua, não pelo nome inteiro: a agenda já
+// trocou "PRÉDIO QUATÁ 300" por "EDIFÍCIO CLAUDIO HADDAD (QUATÁ,300)" e comparar
+// o texto exato fazia os filtros de prédio pararem de achar qualquer sala.
 const predios = [
   {
     nome: 'P1',
     label: 'P1 · Quatá 300',
-    apiNames: ['PRÉDIO QUATÁ 300', 'PRÉDIO CLAUDIO HADDAD (QUATÁ,300)'],
+    numero: 300,
     andares: [-1, 1, 2, 3, 4],
   },
   {
     nome: 'P2',
     label: 'P2 · Quatá 200',
-    apiNames: ['PRÉDIO QUATÁ 200'],
+    numero: 200,
     andares: [1, 2, 3, 4, 5],
   },
   {
     nome: 'P3',
     label: 'P3 · Quatá 67',
-    apiNames: ['PRÉDIO QUATÁ 67'],
+    numero: 67,
     andares: [1, 2, 3, 4, 5, 6],
   },
 ]
 
 const TODOS = predios.length
+
+function getIndicePredio(nomeApi: string) {
+  return predios.findIndex((p) => new RegExp(`\\b${p.numero}\\b`).test(nomeApi ?? ''))
+}
 
 async function fetchSalasLivres() {
   return axios.get<SalasResponse>('/api/salas').then((res) => res.data)
@@ -179,7 +186,7 @@ export default function Home() {
     const termo = busca.trim().toLowerCase()
 
     return data.salas
-      .filter((sala) => predio === TODOS || predios[predio].apiNames.includes(sala.predio))
+      .filter((sala) => predio === TODOS || getIndicePredio(sala.predio) === predio)
       .filter((sala) => andar === null || getNumeroAndar(sala.andar) === andar)
       .filter((sala) => !termo || sala.nome.toLowerCase().includes(termo))
       .sort((a: SalaLivre, b: SalaLivre) => {
@@ -377,7 +384,7 @@ export default function Home() {
                 // Algumas salas vêm sem prédio ou sem andar: junta só o que
                 // existe pra não sobrar um "·" solto.
                 const local = [
-                  predios.find((p) => p.apiNames.includes(sala.predio))?.label || sala.predio,
+                  predios[getIndicePredio(sala.predio)]?.label || sala.predio,
                   sala.andar?.toLowerCase(),
                 ]
                   .filter(Boolean)
